@@ -29,25 +29,55 @@ pnpm test             # Run tests
 pnpm format           # Prettier
 ```
 
-## Project Structure
+## Project Structure (FSD)
+
+Each app uses [Feature-Sliced Design](https://feature-sliced.design/) with 6 layers inside `src/`:
 
 ```
-apps/
-  ├── main/          # Public-facing trading platform
-  │   ├── app/       # Next.js App Router pages
-  │   ├── components/
-  │   ├── hooks/
-  │   ├── lib/
-  │   └── ...
-  └── admin/         # Internal admin panel
-      ├── app/
-      ├── components/
-      ├── hooks/
+apps/{main,admin}/
+  src/
+  ├── app/           # Next.js App Router — routing only (thin page.tsx/layout.tsx)
+  ├── pages/         # FSD: page-level composition (assembles widgets/features)
+  ├── widgets/       # FSD: self-contained UI blocks (Sidebar, DataTable, Header)
+  ├── features/      # FSD: user scenarios (CreateMarket, PlaceOrder, ResolveMarket)
+  ├── entities/      # FSD: business entities (Market, User, Category, Order)
+  └── shared/        # FSD: shared utilities, UI kit, api client, config
+      ├── ui/
       ├── lib/
-      └── ...
+      ├── api/
+      └── config/
 packages/
-  └── shared/        # Shared types, utils, API client (internal package)
+  └── shared/        # Cross-app shared types, utils, API client (@shisa/shared)
+      └── src/
+          ├── types/
+          ├── utils/
+          └── api/
 ```
+
+## FSD Rules
+
+### Layers (top → bottom)
+`app` → `pages` → `widgets` → `features` → `entities` → `shared`
+
+### Import rules
+- Imports go **only downward**: a layer can import from lower layers, never from higher ones
+- `feature` **cannot** import from `widget` or `page`
+- Cross-import between slices of the **same layer is forbidden**
+- Exception: `entities` can reference other entities' types (not UI) via `@x` cross-imports when needed
+
+### Slice structure
+Each slice is a folder with `index.ts` (public API). Internal segments:
+- `ui/` — React components
+- `model/` — state, stores, hooks
+- `api/` — data fetching
+- `lib/` — utils, helpers
+- `config/` — constants, config
+
+Not every segment is required — create only what the slice needs.
+
+### `src/app/` vs `src/pages/`
+- `src/app/` — Next.js App Router files only: `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`. These are thin wrappers that import from `src/pages/`.
+- `src/pages/` — FSD composition layer. Each page assembles widgets and features into a full page UI.
 
 ## Key Conventions
 
@@ -55,13 +85,14 @@ packages/
 - Strict mode, no `any` (use `unknown` and narrow)
 - Prefer `interface` for object shapes, `type` for unions/intersections
 - PascalCase for types: `Market`, `Order`, `UserPosition`
-- Co-locate types with their domain
+- Co-locate types with their FSD slice
 
 ### Components
 - Server Components by default, `'use client'` only when needed
 - PascalCase files: `OrderBook.tsx`, `MarketCard.tsx`
 - One component per file, named export matching filename
 - Props: `{Component}Props`
+- Place components in the `ui/` segment of their FSD slice
 
 ### Styling
 - TailwindCSS only — no CSS modules, no styled-components
